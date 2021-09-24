@@ -49,3 +49,19 @@ HEALTHCHECK  --interval=120s --timeout=30s  --start-period=20s  --retries=3  \
 #always，在容器退出时总是重启容器
 #unless-stopped，在容器退出时总是重启容器，但是不考虑在Docker守护进程启动时就已经停止了的容器
 [root@node5 tomcat]# 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%多阶段构建%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+FROM maven:3.8.1-jdk-11 as builder
+WORKDIR /usr/src/star-user
+COPY . .
+RUN  mvn clean package -P 'prd,!dev'  #指定引用哪个环境的配置文件
+
+
+# 不能使用slim这个jdk，需要生成验证码的时候缺少必要的linux依赖
+FROM adoptopenjdk/openjdk11:latest as prod
+WORKDIR /root
+COPY --from=builder  /usr/src/star-user/target/*.jar /root/app.jar    #多阶段构建，将第一阶段生成的文件拷贝到第二阶段镜像中
+ENTRYPOINT  ["java","-server","-Xms512m","-Xmx1024m","-Dcom.sun.management.jmxremote", "-Dfile.encoding=UTF-8", "-Xrunjdwp:server=y,transport=dt_socket,address=8000,suspend=n","-jar","/root/app.jar"]
+
